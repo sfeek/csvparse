@@ -1,0 +1,9 @@
+# depslib dependency file v1.0
+1461176160 source:c:\users\shane.feek.structuretec\documents\visual studio 2015\sourcecode\c\csvparse\main.c
+	<stdio.h>
+	<stdlib.h>
+	<string.h>
+	"CSVLib.h"
+
+1461094247 c:\users\shane.feek.structuretec\documents\visual studio 2015\sourcecode\c\csvparse\csvlib.h
+
