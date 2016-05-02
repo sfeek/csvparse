@@ -1,169 +1,198 @@
-#define _XOPEN_SOURCE 500 /* Enable certain library functions (strdup) on linux.  See feature_test_macros(7) */
-
-#include <stdlib.h>
+/*  Simple and fast CSV parser that is memory efficient and handles escaped characters and quotes correctly.
+    Written by Shane Feek 04/20/2016  Email: shane.feek@gmail.com
+*/
 #include <stdio.h>
-#include <limits.h>
+#include <stdlib.h>
 #include <string.h>
+#include "CSVLib.h"
 
-struct entry_s {
-	char *key;
-	char *value;
-	struct entry_s *next;
-};
+int main()
+{
+    char **parsed;
+    int numberOfFields;
+    int i;
 
-typedef struct entry_s entry_t;
+    /* Our test string to parse */
+    char *csv = "This is a field,,\"This line has a carriage\n return in it!\",Test,\"One\\Two,Three\",10,\\\"The End\\\"\n";
 
-struct hashtable_s {
-	int size;
-	struct entry_s **table;
-};
+    /* Show it on the screen */
+    printf("%s\n\n", csv);
 
-typedef struct hashtable_s hashtable_t;
+    /* Parse it! */
+    if (!(parsed = CSVParse(csv,&numberOfFields)))
+    {
+        printf("String parsing failed!\n");
+        return 1;
+    }
 
+    /* Show the parsed array */
+    for(i = 0;i < numberOfFields;i++)
+    {
+        printf("Field %d: %s\n",i,parsed[i]);
+    }
 
-/* Create a new hashtable. */
-hashtable_t *ht_create( int size ) {
+    /* Clean up after ourselves */
+    cleanupStrings(parsed,numberOfFields);
 
-	hashtable_t *hashtable = NULL;
-	int i;
-
-	if( size < 1 ) return NULL;
-
-	/* Allocate the table itself. */
-	if( ( hashtable = malloc( sizeof( hashtable_t ) ) ) == NULL ) {
-		return NULL;
-	}
-
-	/* Allocate pointers to the head nodes. */
-	if( ( hashtable->table = malloc( sizeof( entry_t * ) * size ) ) == NULL ) {
-		return NULL;
-	}
-	for( i = 0; i < size; i++ ) {
-		hashtable->table[i] = NULL;
-	}
-
-	hashtable->size = size;
-
-	return hashtable;
+    /* And we are out of here! */
+    return 0;
 }
 
-/* Hash a string for a particular hash table. */
-int ht_hash( hashtable_t *hashtable, char *key ) {
+/*  Parse CSV string
+    Input:  String of CSV values
+            Number of Fields container
+    Return: Array of strings, one for each field
+            Number of Fields
+*/
+char **CSVParse(char *str, int *numberOfFields)
+{
+    char *newStr = NULL;
+    char currentCharacter;
+    char **strArray = NULL;
 
-	unsigned long int hashval;
-	int i = 0;
+    int quote = 0;
+    int csvLength = strlen(str);
+    int maxFieldCount = 2; /* Start with two fields as MAX */
+    int *commaPositions = NULL;
+    int currentField = 0;
+    int cleanStringPosition = 0;
+    int i;
+    int startPosition = 0;
+    int fieldLength;
 
-	/* Convert our string to an integer */
-	while( hashval < ULONG_MAX && i < strlen( key ) ) {
-		hashval = hashval << 8;
-		hashval += key[ i ];
-		i++;
-	}
+    /* Allocate memory for the comma position array */
+    if (!(commaPositions = malloc(sizeof(int) * maxFieldCount)))
+    {
+        printf("Error Allocating Memory!\n");
+        return NULL;
+    }
 
-	return hashval % hashtable->size;
+    /* Allocate memory for "cleaned up" string the same size as the original string to guarantee that it is big enough */
+    if (!(newStr = malloc(sizeof(char) * csvLength)))
+    {
+        printf("Error Allocating Memory!\n");
+        return NULL;
+    }
+
+    /* First pass through to record the correct comma positions */
+    for(i = 0; i < csvLength; i++)
+    {
+        /* Get a single character and skip any control or garbage characters */
+        if ((currentCharacter = str[i]) < 32) continue;
+
+        /* Handle quotes, escapes and commas */
+        switch(currentCharacter)
+        {
+            case 92:
+            {
+                if (quote == 0)
+                {
+                    /* Move ahead one character */
+                    i++;
+
+                    /* Keep the next good character and move to the next good character position*/
+                    newStr[cleanStringPosition++] = str[i];
+
+                    /* Move on to the next new character */
+                    continue;
+                }
+                break;
+            }
+
+            /* Check for quote and keep track of pairs */
+            case 34:
+            {
+                /* Toggle the pair indicator */
+                quote = 1 - quote;
+                /* Skip the quote */
+                continue;
+            }
+
+            /* Check for comma that is NOT inside quotes */
+            case 44:
+            {
+                if (quote == 0)
+                {
+                    /* Check to see if we need to grow our comma position array */
+                    if (currentField == maxFieldCount)
+                    {
+                        /* Double in size each time */
+                        maxFieldCount *= 2;
+
+                        /* Allocate more memory for the array*/
+                        if (!(commaPositions = realloc(commaPositions,sizeof(int) * maxFieldCount)))
+                        {
+                            printf("Error Expanding Array!\n");
+                            return NULL;
+                        }
+                    }
+
+                    /* Keep track of the comma positions and move to the next field*/
+                    commaPositions[currentField++] = cleanStringPosition;
+                }
+            }
+        }
+
+        /* Keep the good characters and move to the next good character position  */
+        newStr[cleanStringPosition++] = currentCharacter;
+    }
+
+    /* Make sure that clean string gets NULL terminator */
+    newStr[cleanStringPosition] = 0;
+
+    /* Make sure to mark the end of the string as a "comma" position so that the last field gets included in the array and include the last field */
+    commaPositions[currentField++] = cleanStringPosition;
+
+    /* Record the Total number of fields to return to the calling function */
+    *numberOfFields = currentField;
+
+    /* Allocate an array of pointers to chars, not actually allocating any strings themselves */
+    strArray = malloc(sizeof(char *) * currentField );
+
+    /* Copy the strings to the new string array */
+    for(i = 0;i < currentField;i++)
+    {
+        /* Calculate length of the current field plus the Null Terminator*/
+        fieldLength = commaPositions[i] - startPosition + 1;
+
+        /* Replace the comma with a Null terminator */
+        newStr[commaPositions[i]] = 0;
+
+        /* Allocate memory for the current field */
+        strArray[i] = malloc(sizeof(char) * fieldLength);
+
+        /* Copy the string into the new array */
+        memcpy(strArray[i],newStr + startPosition,fieldLength);
+
+        /* Move our start position to the next field */
+        startPosition = commaPositions[i] + 1;
+    }
+
+    /* Clean up the dynamic arrays */
+    free(commaPositions);
+    free(newStr);
+
+    /* Return the new array back to the calling function */
+    return strArray;
 }
 
-/* Create a key-value pair. */
-entry_t *ht_newpair( char *key, char *value ) {
-	entry_t *newpair;
+/*  Clean up an array of strings
+    Input:  Array of strings
+            Number of strings
+    Return: none
+*/
+void cleanupStrings(char **strArray, int numberOfStrings)
+{
+    int i;
 
-	if( ( newpair = malloc( sizeof( entry_t ) ) ) == NULL ) {
-		return NULL;
-	}
+    /* Free the individual strings */
+    for(i = 0; i < numberOfStrings; i++)
+    {
+        free(strArray[i]);
+    }
 
-	if( ( newpair->key = strdup( key ) ) == NULL ) {
-		return NULL;
-	}
-
-	if( ( newpair->value = strdup( value ) ) == NULL ) {
-		return NULL;
-	}
-
-	newpair->next = NULL;
-
-	return newpair;
-}
-
-/* Insert a key-value pair into a hash table. */
-void ht_set( hashtable_t *hashtable, char *key, char *value ) {
-	int bin = 0;
-	entry_t *newpair = NULL;
-	entry_t *next = NULL;
-	entry_t *last = NULL;
-
-	bin = ht_hash( hashtable, key );
-
-	next = hashtable->table[ bin ];
-
-	while( next != NULL && next->key != NULL && strcmp( key, next->key ) > 0 ) {
-		last = next;
-		next = next->next;
-	}
-
-	/* There's already a pair.  Let's replace that string. */
-	if( next != NULL && next->key != NULL && strcmp( key, next->key ) == 0 ) {
-
-		free( next->value );
-		next->value = strdup( value );
-
-	/* Nope, could't find it.  Time to grow a pair. */
-	} else {
-		newpair = ht_newpair( key, value );
-
-		/* We're at the start of the linked list in this bin. */
-		if( next == hashtable->table[ bin ] ) {
-			newpair->next = next;
-			hashtable->table[ bin ] = newpair;
-
-		/* We're at the end of the linked list in this bin. */
-		} else if ( next == NULL ) {
-			last->next = newpair;
-
-		/* We're in the middle of the list. */
-		} else  {
-			newpair->next = next;
-			last->next = newpair;
-		}
-	}
-}
-
-/* Retrieve a key-value pair from a hash table. */
-char *ht_get( hashtable_t *hashtable, char *key ) {
-	int bin = 0;
-	entry_t *pair;
-
-	bin = ht_hash( hashtable, key );
-
-	/* Step through the bin, looking for our value. */
-	pair = hashtable->table[ bin ];
-	while( pair != NULL && pair->key != NULL && strcmp( key, pair->key ) > 0 ) {
-		pair = pair->next;
-	}
-
-	/* Did we actually find anything? */
-	if( pair == NULL || pair->key == NULL || strcmp( key, pair->key ) != 0 ) {
-		return NULL;
-
-	} else {
-		return pair->value;
-	}
-
+    /* Once the strings themselves are freed, free the actual array itself */
+    free(strArray);
 }
 
 
-int main( int argc, char **argv ) {
-
-	hashtable_t *hashtable = ht_create( 65536 );
-
-	ht_set( hashtable, "key1", "inky" );
-	ht_set( hashtable, "key2", "pinky" );
-	ht_set( hashtable, "key3", "blinky" );
-	ht_set( hashtable, "key4", "floyd" );
-
-	printf( "%s\n", ht_get( hashtable, "key1" ) );
-	printf( "%s\n", ht_get( hashtable, "key2" ) );
-	printf( "%s\n", ht_get( hashtable, "key3" ) );
-	printf( "%s\n", ht_get( hashtable, "key4" ) );
-
-	return 0;
-}
