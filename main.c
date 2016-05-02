@@ -83,6 +83,7 @@ char **CSVParse(char *str, int *numberOfFields)
         /* Handle quotes, escapes and commas */
         switch(currentCharacter)
         {
+            /* Check for escape character not inside quotes */
             case 92:
             {
                 if (quote == 0)
