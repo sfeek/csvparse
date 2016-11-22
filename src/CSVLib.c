@@ -22,14 +22,14 @@ extern char **CSVParse(char *str, int *numberOfFields)
     int fieldLength;
 
     /* Allocate memory for the comma position array */
-    if (!(commaPositions = malloc(sizeof(int) * maxFieldCount)))
+    if (!(commaPositions = calloc(1,sizeof(int) * maxFieldCount)))
     {
         printf("Error Allocating Memory!\n");
         return NULL;
     }
 
     /* Allocate memory for "cleaned up" string the same size as the original string to guarantee that it is big enough */
-    if (!(newStr = malloc(sizeof(char) * csvLength)))
+    if (!(newStr = calloc(1,sizeof(char) * csvLength)))
     {
         printf("Error Allocating Memory!\n");
         return NULL;
@@ -121,7 +121,7 @@ extern char **CSVParse(char *str, int *numberOfFields)
         newStr[commaPositions[i]] = 0;
 
         /* Allocate memory for the current field */
-        strArray[i] = malloc(sizeof(char) * fieldLength);
+        strArray[i] = calloc(1,sizeof(char) * fieldLength);
 
         /* Copy the string into the new array */
         memcpy(strArray[i],newStr + startPosition,fieldLength);
