@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../include/CSVLib.h"
+#include <CSVLib.h>
 
 int main()
 {
