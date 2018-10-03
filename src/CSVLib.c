@@ -76,7 +76,7 @@ extern char **CSVParse(char *str, int *numberOfFields)
                 if (quote == 0)
                 {
                     /* Check to see if we need to grow our comma position array */
-                    if (currentField == maxFieldCount)
+                    if (currentField == maxFieldCount-1)
                     {
                         /* Double in size each time */
                         maxFieldCount *= 2;
